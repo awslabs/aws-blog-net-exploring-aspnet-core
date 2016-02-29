@@ -6,5 +6,5 @@ If you wish to discuss topics about ASP.NET Core on AWS feel free to open up an 
 
 ## Posts in the series
 
-* [Exploring ASP.NET Core Deployment: Part 1 Deploying from GitHub](https://blogs.aws.amazon.com/net/)
+* [Exploring ASP.NET Core Deployment: Part 1 Deploying from GitHub](http://blogs.aws.amazon.com/net/post/TxSBK1AHRGLHVC)
 	* Discuss how you can take advantage of ASP.NET Core's ability to run from source and deploy straight from GitHub.

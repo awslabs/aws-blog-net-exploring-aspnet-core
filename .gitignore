@@ -1,0 +1,18 @@
+######################################
+# Visual Studio per-user settings data
+######################################
+*.suo
+*.user
+
+
+**/bin/
+**/obj/
+**/TestResults/
+**/Temp/
+**/NuGet.exe
+**/buildlogs/
+
+**/.vs/
+**/artifacts/
+
+**/project.lock.json

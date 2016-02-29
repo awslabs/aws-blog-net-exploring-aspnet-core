@@ -1,0 +1,12 @@
+version: 0.0
+os: windows
+files:
+  - source: \
+    destination: C:\ExploringAspNetCore
+hooks:
+  ApplicationStop:
+    - location: .\RemoveApp.ps1
+      timeout: 30
+  ApplicationStart:
+    - location: .\InstallApp.ps1
+      timeout: 300

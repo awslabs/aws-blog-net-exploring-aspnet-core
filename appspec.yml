@@ -10,3 +10,6 @@ hooks:
   ApplicationStart:
     - location: .\InstallApp.ps1
       timeout: 300
+  ValidateService:
+    - location: .\ValidateInstall.ps1
+      timeout: 300

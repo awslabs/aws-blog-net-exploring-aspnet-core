@@ -1,6 +1,20 @@
+if ((Get-AWSCredentials) -eq $null)
+{
+    throw "You must set credentials via Set-AWSCredentials before running this cmdlet."
+}
+if ((Get-DefaultAWSRegion) -eq $null)
+{
+    throw "You must set a region via Set-DefaultAWSRegion before running this cmdlet."
+}
+
+function _deletePipelineBucket()
+{
+    Get-S3Bucket | Where-Object {$_.BucketName.StartsWith("ExploringAspNetCore-Part2-")} | foreach {Write-Host 'Deleting pipeline bucket:' $_.BucketName; Remove-S3Bucket -BucketName $_.BucketName -DeleteBucketContent -Force}    
+}
+
 function _deleteStack()
 {
-    $stack = (Get-CFNStack -StackName "ExploringAspNetCore-Part1" | Where-Object {$_.StackName -eq "ExploringAspNetCore-Part1"})
+    $stack = (Get-CFNStack -StackName "ExploringAspNetCore-Part2" | Where-Object {$_.StackName -eq "ExploringAspNetCore-Part2"})
     if($stack -ne $null)
     {
         Write-Host "Deleting CloudFormation existing stack"
@@ -8,22 +22,6 @@ function _deleteStack()
     }
 }
 
-function _deleteCodeDeployPrimitives()
-{
-    $applications = Get-CDApplicationList | Where-Object {$_.StartsWith("ExploringAspNetCorePart1")}
-    foreach($application in $applications)
-    {
-        $deploymentGroups = Get-CDDeploymentGroupList -ApplicationName $application
-        foreach($deploymentGroup in $deploymentGroups.DeploymentGroups)
-        {
-            Write-Host ("Deleting Deployment Group " + $deploymentGroup)
-            Remove-CDDeploymentGroup -ApplicationName $application -DeploymentGroupName $deploymentGroup -Force
-        }
 
-        Write-Host ("Deleting CodeDeploy Application " + $application)
-        Remove-CDApplication -ApplicationName  $application -Force
-    }
-}
-
-_deleteCodeDeployPrimitives
+_deletePipelineBucket
 _deleteStack

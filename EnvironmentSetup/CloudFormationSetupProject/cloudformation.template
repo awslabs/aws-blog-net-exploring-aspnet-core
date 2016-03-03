@@ -1,0 +1,845 @@
+{
+	"AWSTemplateFormatVersion" : "2010-09-09",
+
+	"Description" : "",
+
+	"Parameters" : {
+		"PipelineBucket" : {
+		    "Type" : "String",
+            "Description" : "The bucket where versions of the application will be placed and pipeline metadata"
+		},
+        "ImageId" : {
+            "Type" : "AWS::EC2::Image::Id",
+            "Description" : "The base AMI to start with. This is expected to be the latest base Windows 2012 R2 AMI"
+        },
+        "BetaInstanceType" : {
+            "Type" : "String",
+            "Description" : "The EC2 instance type to use when creating the application servers",
+            "Default"     : "m1.small"
+        },
+        "ProdInstanceType" : {
+            "Type" : "String",
+            "Description" : "The EC2 instance type to use when creating the application servers",
+            "Default"     : "m1.small"
+        },
+        "EC2KeyName"   : {
+            "Type" : "AWS::EC2::KeyPair::KeyName",
+            "Description" : "The EC2 key pair name to use for remoting into the application servers"
+        },
+        "OpenRemoteDesktopPort" : {
+            "Type" : "String",
+            "Description" : "If set to Yes the RDP port will be open. This is useful for debugging but for security reason should not be done for production systems.",
+            "AllowedValues" : [
+                "Yes",
+                "No"
+            ]
+        }
+	},
+    "Conditions"               : {
+        "OpenRemoteDesktopPortCondition" : {
+            "Fn::Equals" : [
+                "Yes",
+                {
+                    "Ref" : "OpenRemoteDesktopPort"
+                }
+            ]
+        }
+    },
+	"Resources" : {
+       "WaitHandle" : {
+            "Type" : "AWS::CloudFormation::WaitConditionHandle"
+        },
+        "WaitCondition" : {
+            "Type" : "AWS::CloudFormation::WaitCondition",
+            "Properties" : {
+                "Count" : 2,
+                "Handle" : {
+                    "Ref" : "WaitHandle"
+                },
+                "Timeout" : "900"
+            }
+        },
+        "AppSecurity"   : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "GroupDescription" : "The security group for the application servers",
+                "SecurityGroupIngress" : [
+                    {
+                        "CidrIp" : "0.0.0.0/0",
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "80",
+                        "ToPort"     : "80"
+                    },
+                    {
+                        "CidrIp" : {
+                            "Fn::If" : [
+                                "OpenRemoteDesktopPortCondition",
+                                "0.0.0.0/0",
+                                "0.0.0.0/32"
+                            ]
+                        },
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "3389",
+                        "ToPort"     : "3389"
+                    }
+                ]
+            }
+        },
+        "AppServerBeta"   : {
+            "Type" : "AWS::EC2::Instance",
+            "Metadata" : {
+                "AWS::CloudFormation::Init" : {
+                    "config" : {
+                        "commands" : {
+                            "01-import-service-module"  : {
+                                "command" : "powershell.exe -Command Import-Module -Name ServerManager",
+                                "ignoreErrors" : "true",
+                                "waitAfterCompletion" : 0
+                            },
+                            "02-install-web-server"  : {
+                                "command" : "powershell.exe -Command Install-WindowsFeature Web-Server,Application-Server,AS-Web-Support",
+                                "ignoreErrors" : "true",
+                                "waitAfterCompletion" : 0
+                            },
+                            "03-download-host-agent" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command \"Read-S3Object ",
+                                            "-BucketName aws-codedeploy-us-east-1 ",
+                                            "-Key latest/codedeploy-agent.msi ",
+                                            "-File codedeploy-agent.msi\""
+                                        ]
+                                    ]
+                                },
+                                "cwd"     : "C:/cfn",
+                                "waitAfterCompletion" : 0
+                            },
+                            "04-install-host-agent"  : {
+                                "command" : "C:\\cfn\\codedeploy-agent.msi /quiet /l C:\\cfn\\host-agent-install-log.txt",
+                                "ignoreErrors" : "true",
+                                "waitAfterCompletion" : 0
+                            },
+                            "05-download-host-agent" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command \"((new-object net.webclient).DownloadFile('http://go.microsoft.com/fwlink/?LinkId=690721', 'C:\\cfn\\httpPlatformHandler_amd64.msi'))\""
+                                        ]
+                                    ]
+                                },
+                                "cwd"     : "C:/cfn",
+                                "waitAfterCompletion" : 0
+                            },
+                            "06-install-host-agent"  : {
+                                "command" : "C:\\cfn\\httpPlatformHandler_amd64.msi /quiet /l C:\\cfn\\httpPlatformHandler-install-log.txt",
+                                "ignoreErrors" : "true",
+                                "waitAfterCompletion" : 0
+                            },
+                            "07-signal-ready"        : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "\"C:\\Program Files\\Amazon\\cfn-bootstrap\\cfn-signal\"",
+                                            " -e 0 \"",
+                                            {
+                                                "Ref" : "WaitHandle"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : 0
+                            }
+                        },
+                        "services" : {
+                            "windows" : {
+                                "codedeploy-agent" : {
+                                    "enabled" : "true",
+                                    "ensureRunning" : "true",
+                                    "commands"      : [
+                                        "01-install-host-agent"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "Properties" : {
+                "IamInstanceProfile" : {
+                    "Ref" : "InstanceRoleInstanceProfile"
+                },
+                "ImageId"            : {
+                    "Ref" : "ImageId"
+                },
+                "InstanceType"       : {
+                    "Ref" : "BetaInstanceType"
+                },
+                "KeyName"            : {
+                    "Ref" : "EC2KeyName"
+                },
+                "SecurityGroups"     : [
+                    {
+                        "Ref" : "AppSecurity"
+                    }
+                ],
+                "Tags"               : [
+                    {
+                        "Key" : "Name",
+                        "Value" : "ExploringAspNetCorePart2-Beta"
+                    }
+                ],
+                "UserData"           : {
+                    "Fn::Base64" : {
+                        "Fn::Join" : [
+                            "",
+                            [
+                                "<script>\n",
+                                "mkdir c:\\cfn\n",
+                                "mkdir c:\\cfn\\log\n",
+                                "c:\\\"Program Files\"\\Amazon\\cfn-bootstrap\\cfn-init.exe -s ",
+                                {
+                                    "Ref" : "AWS::StackName"
+                                },
+                                " --region ",
+                                {
+                                    "Ref" : "AWS::Region"
+                                },
+                                " -r AppServerBeta > c:\\cfn\\log\\cfn-call-log 2>&1",
+                                "</script>"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+
+        "ProdLaunchConfiguration" : {
+            "Type" : "AWS::AutoScaling::LaunchConfiguration",
+            "Metadata" : {
+                "AWS::CloudFormation::Init" : {
+                    "config" : {
+                        "commands" : {
+                            "01-import-service-module"  : {
+                                "command" : "powershell.exe -Command Import-Module -Name ServerManager",
+                                "ignoreErrors" : "true",
+                                "waitAfterCompletion" : 0
+                            },
+                            "02-install-web-server"  : {
+                                "command" : "powershell.exe -Command Install-WindowsFeature Web-Server,Application-Server,AS-Web-Support",
+                                "ignoreErrors" : "true",
+                                "waitAfterCompletion" : 0
+                            },
+                            "03-download-host-agent" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command \"Read-S3Object ",
+                                            "-BucketName aws-codedeploy-us-east-1 ",
+                                            "-Key latest/codedeploy-agent.msi ",
+                                            "-File codedeploy-agent.msi\""
+                                        ]
+                                    ]
+                                },
+                                "cwd"     : "C:/cfn",
+                                "waitAfterCompletion" : 0
+                            },
+                            "04-install-host-agent"  : {
+                                "command" : "C:\\cfn\\codedeploy-agent.msi /quiet /l C:\\cfn\\host-agent-install-log.txt",
+                                "ignoreErrors" : "true",
+                                "waitAfterCompletion" : 0
+                            },
+                            "05-download-host-agent" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command \"((new-object net.webclient).DownloadFile('http://go.microsoft.com/fwlink/?LinkId=690721', 'C:\\cfn\\httpPlatformHandler_amd64.msi'))\""
+                                        ]
+                                    ]
+                                },
+                                "cwd"     : "C:/cfn",
+                                "waitAfterCompletion" : 0
+                            },
+                            "06-install-host-agent"  : {
+                                "command" : "C:\\cfn\\httpPlatformHandler_amd64.msi /quiet /l C:\\cfn\\httpPlatformHandler-install-log.txt",
+                                "ignoreErrors" : "true",
+                                "waitAfterCompletion" : 0
+                            },
+                            "07-signal-ready"        : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "\"C:\\Program Files\\Amazon\\cfn-bootstrap\\cfn-signal\"",
+                                            " -e 0 \"",
+                                            {
+                                                "Ref" : "WaitHandle"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : 0
+                            }
+                        },
+                        "services" : {
+                            "windows" : {
+                                "codedeploy-agent" : {
+                                    "enabled" : "true",
+                                    "ensureRunning" : "true",
+                                    "commands"      : [
+                                        "01-install-host-agent"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "Properties" : {
+                "IamInstanceProfile" : {
+                    "Ref" : "InstanceRoleInstanceProfile"
+                },
+                "ImageId"            : {
+                    "Ref" : "ImageId"
+                },
+                "InstanceType"       : {
+                    "Ref" : "ProdInstanceType"
+                },
+                "KeyName"            : {
+                    "Ref" : "EC2KeyName"
+                },
+                "SecurityGroups"     : [
+                    {
+                        "Ref" : "AppSecurity"
+                    }
+                ],
+                "UserData"           : {
+                    "Fn::Base64" : {
+                        "Fn::Join" : [
+                            "",
+                            [
+                                "<script>\n",
+                                "mkdir c:\\cfn\n",
+                                "mkdir c:\\cfn\\log\n",
+                                "c:\\\"Program Files\"\\Amazon\\cfn-bootstrap\\cfn-init.exe -s ",
+                                {
+                                    "Ref" : "AWS::StackName"
+                                },
+                                " --region ",
+                                {
+                                    "Ref" : "AWS::Region"
+                                },
+                                " -r ProdLaunchConfiguration > c:\\cfn\\log\\cfn-call-log 2>&1",
+                                "</script>"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+        "ProdAutoScalingGroup"    : {
+            "Type" : "AWS::AutoScaling::AutoScalingGroup",
+            "Properties" : {
+                "AvailabilityZones" : {
+                    "Fn::GetAZs" : ""
+                },
+                "LaunchConfigurationName" : {
+                    "Ref" : "ProdLaunchConfiguration"
+                },
+                "MinSize"                 : "1",
+                "MaxSize"                 : "4",
+                "LoadBalancerNames"       : [
+                    {
+                        "Ref" : "ProdLoadBalancer"
+                    }
+                ],
+                "Tags" : [{"Key" : "Name", "Value" : "ExploringAspNetCorePart2-Prod", "PropagateAtLaunch" : true}
+				]
+            }
+        },
+        "ScaleUpPolicy"       : {
+            "Type" : "AWS::AutoScaling::ScalingPolicy",
+            "Properties" : {
+                "AdjustmentType" : "ChangeInCapacity",
+                "AutoScalingGroupName" : {
+                    "Ref" : "ProdAutoScalingGroup"
+                },
+                "Cooldown"             : "1",
+                "ScalingAdjustment"    : "1"
+            }
+        },
+        "ScaleDownPolicy"     : {
+            "Type" : "AWS::AutoScaling::ScalingPolicy",
+            "Properties" : {
+                "AdjustmentType" : "ChangeInCapacity",
+                "AutoScalingGroupName" : {
+                    "Ref" : "ProdAutoScalingGroup"
+                },
+                "Cooldown"             : "1",
+                "ScalingAdjustment"    : "-1"
+            }
+        },
+        "CPUAlarmHigh"        : {
+            "Type" : "AWS::CloudWatch::Alarm",
+            "Properties" : {
+                "AlarmDescription" : "Scale-up if CPU > 90% for 10 minutes",
+                "MetricName"       : "CPUUtilization",
+                "Namespace"        : "AWS/EC2",
+                "Statistic"        : "Average",
+                "Period"           : "300",
+                "EvaluationPeriods" : "2",
+                "Threshold"         : "90",
+                "AlarmActions"      : [
+                    {
+                        "Ref" : "ScaleUpPolicy"
+                    }
+                ],
+                "Dimensions"        : [
+                    {
+                        "Name" : "AutoScalingGroupName",
+                        "Value" : {
+                            "Ref" : "ProdAutoScalingGroup"
+                        }
+                    }
+                ],
+                "ComparisonOperator" : "GreaterThanThreshold"
+            }
+        },
+        "CPUAlarmLow"         : {
+            "Type" : "AWS::CloudWatch::Alarm",
+            "Properties" : {
+                "AlarmDescription" : "Scale-down if CPU < 70% for 10 minutes",
+                "MetricName"       : "CPUUtilization",
+                "Namespace"        : "AWS/EC2",
+                "Statistic"        : "Average",
+                "Period"           : "300",
+                "EvaluationPeriods" : "2",
+                "Threshold"         : "70",
+                "AlarmActions"      : [
+                    {
+                        "Ref" : "ScaleDownPolicy"
+                    }
+                ],
+                "Dimensions"        : [
+                    {
+                        "Name" : "AutoScalingGroupName",
+                        "Value" : {
+                            "Ref" : "ProdAutoScalingGroup"
+                        }
+                    }
+                ],
+                "ComparisonOperator" : "LessThanThreshold"
+            }
+        },
+        "ProdLoadBalancer"        : {
+            "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+            "Properties" : {
+                "AvailabilityZones" : {
+                    "Fn::GetAZs" : ""
+                },
+                "Listeners"         : [
+                    {
+                        "Protocol" : "HTTP",
+                        "InstanceProtocol" : "HTTP",
+                        "InstancePort"     : "80",
+                        "LoadBalancerPort" : "80"
+                    }
+                ],
+                "HealthCheck"       : {
+                    "Timeout" : "5",
+                    "Interval" : "10",
+                    "Target"   : "TCP:80",
+                    "HealthyThreshold" : "3",
+                    "UnhealthyThreshold" : "5"
+                },
+                "ConnectionDrainingPolicy" : {
+                    "Enabled" : true,
+                    "Timeout" : 20
+                },
+                "Tags"                     : [
+                    {
+                        "Key" : "Name",
+                        "Value" : "ExploringAspNetCorePart2-Prod"
+                    }
+                ]
+            }
+        },
+        "CodeDeployTrustRole" : {
+            "Type" : "AWS::IAM::Role",
+            "Properties" : {
+                "AssumeRolePolicyDocument" : {
+                    "Statement" : [
+                        {
+                            "Sid" : "1",
+                            "Effect" : "Allow",
+                            "Principal" : {
+                                "Service" : [
+                                    "codedeploy.us-east-1.amazonaws.com",
+                                    "codedeploy.us-west-2.amazonaws.com"
+                                ]
+                            },
+                            "Action"    : "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path"                     : "/"
+            }
+        },
+        "CodeDeployRolePolicies" : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "CodeDeployPolicy",
+                "PolicyDocument" : {
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Resource" : [
+                                "*"
+                            ],
+                            "Action"   : [
+                                "ec2:Describe*"
+                            ]
+                        },
+                        {
+                            "Effect" : "Allow",
+                            "Resource" : [
+                                "*"
+                            ],
+                            "Action"   : [
+                                "autoscaling:CompleteLifecycleAction",
+                                "autoscaling:DeleteLifecycleHook",
+                                "autoscaling:DescribeLifecycleHooks",
+                                "autoscaling:DescribeAutoScalingGroups",
+                                "autoscaling:PutLifecycleHook",
+                                "autoscaling:RecordLifecycleActionHeartbeat"
+                            ]
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "CodeDeployTrustRole"
+                    }
+                ]
+            }
+        },
+        "CodeDeployAppBeta"      : {
+            "Type" : "AWS::CodeDeploy::Application",
+			"DependsOn" : "WaitCondition",
+			"Properties" : {
+                "ApplicationName" : "ExploringAspNetCorePart2-Beta"
+            }
+        },
+        "CodeDeployAppBetaFleet" : {
+            "Type" : "AWS::CodeDeploy::DeploymentGroup",
+            "DependsOn" : "AppServerBeta",
+            "Properties" : {
+                "ApplicationName" : {
+                    "Ref" : "CodeDeployAppBeta"
+                },
+                "DeploymentGroupName" : "ExploringAspNetCorePart2-Beta-Fleet",
+                "Ec2TagFilters"       : [
+                    {
+                        "Key" : "Name",
+                        "Type" : "KEY_AND_VALUE",
+                        "Value" : "ExploringAspNetCorePart2-Beta"
+                    }
+                ],
+                "ServiceRoleArn"      : {
+                    "Fn::GetAtt" : [
+                        "CodeDeployTrustRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "CodeDeployAppProd"      : {
+            "Type" : "AWS::CodeDeploy::Application",
+			"DependsOn" : "WaitCondition",
+            "Properties" : {
+                "ApplicationName" : "ExploringAspNetCorePart2-Prod"
+            }
+        },
+        "CodeDeployAppProdFleet" : {
+            "Type" : "AWS::CodeDeploy::DeploymentGroup",
+            "DependsOn" : "WaitCondition",
+            "Properties" : {
+                "ApplicationName" : {
+                    "Ref" : "CodeDeployAppProd"
+                },
+                "DeploymentGroupName" : "ExploringAspNetCorePart2-Prod-Fleet",
+				"AutoScalingGroups" : [{ "Ref" : "ProdAutoScalingGroup" }],
+                "ServiceRoleArn"      : {
+                    "Fn::GetAtt" : [
+                        "CodeDeployTrustRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "PipelineRole"           : {
+            "Type" : "AWS::IAM::Role",
+            "Properties" : {
+                "AssumeRolePolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Sid" : "",
+                            "Effect" : "Allow",
+                            "Principal" : {
+                                "Service" : "codepipeline.amazonaws.com"
+                            },
+                            "Action"    : "sts:AssumeRole"
+                        }
+                    ]
+                }
+            }
+        },
+        "PipelinePolicy"         : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyDocument" : {
+                    "Statement" : [
+                        {
+                            "Action" : [
+                                "s3:GetObject",
+                                "s3:GetObjectVersion",
+                                "s3:GetBucketVersioning"
+                            ],
+                            "Resource" : "*",
+                            "Effect"   : "Allow"
+                        },
+                        {
+                            "Action" : [
+                                "s3:PutObject"
+                            ],
+                            "Resource" : [
+                                "arn:aws:s3:::codepipeline*",
+                                "arn:aws:s3:::elasticbeanstalk*"
+                            ],
+                            "Effect"   : "Allow"
+                        },
+                        {
+                            "Action" : [
+                                "codedeploy:CreateDeployment",
+                                "codedeploy:GetApplicationRevision",
+                                "codedeploy:GetDeployment",
+                                "codedeploy:GetDeploymentConfig",
+                                "codedeploy:RegisterApplicationRevision"
+                            ],
+                            "Resource" : "*",
+                            "Effect"   : "Allow"
+                        },
+                        {
+                            "Action" : [
+                                "elasticbeanstalk:*",
+                                "ec2:*",
+                                "elasticloadbalancing:*",
+                                "autoscaling:*",
+                                "cloudwatch:*",
+                                "s3:*",
+                                "sns:*",
+                                "cloudformation:*",
+                                "rds:*",
+                                "sqs:*",
+                                "ecs:*",
+                                "iam:PassRole"
+                            ],
+                            "Resource" : "*",
+                            "Effect"   : "Allow"
+                        },
+                        {
+                            "Action" : [
+                                "lambda:InvokeFunction",
+                                "lambda:ListFunctions"
+                            ],
+                            "Resource" : "*",
+                            "Effect"   : "Allow"
+                        }
+                    ]
+                },
+                "PolicyName"     : "PipelinePolicy",
+                "Roles" : [{ "Ref" : "PipelineRole" }]
+            }
+        },
+        "Pipeline"               : {
+            "Type" : "AWS::CodePipeline::Pipeline",
+            "Properties" : {
+				"Name" : "ExploringAspNetCore-Part2",
+                "ArtifactStore" : {
+                    "Location" : {
+                        "Ref" : "PipelineBucket"
+                    },
+                    "Type"     : "S3"
+                },
+                "RoleArn"       : { "Fn::GetAtt" : ["PipelineRole", "Arn"] },
+                "Stages"        : [
+                    {
+                        "Name" : "Source",
+                        "Actions" : [
+                            {
+                                "Name" : "SourceAction",
+                                "ActionTypeId" : {
+                                    "Category" : "Source",
+                                    "Owner"    : "AWS",
+                                    "Version"  : "1",
+                                    "Provider" : "S3"
+                                },
+                                "OutputArtifacts" : [
+                                    {
+                                        "Name" : "SourceOutput"
+                                    }
+                                ],
+                                "Configuration"   : {
+                                    "S3Bucket" : {
+                                        "Ref" : "PipelineBucket"
+                                    },
+                                    "S3ObjectKey" : "aws-blog-net-exploring-aspnet-core.zip"
+                                },
+                                "RunOrder"        : 1
+                            }
+                        ]
+                    },
+                    {
+                        "Name" : "Beta",
+                        "Actions" : [
+                            {
+                                "Name" : "Beta",
+                                "InputArtifacts" : [
+                                    {
+                                        "Name" : "SourceOutput"
+                                    }
+                                ],
+                                "ActionTypeId"   : {
+                                    "Category" : "Deploy",
+                                    "Owner"    : "AWS",
+                                    "Version"  : "1",
+                                    "Provider" : "CodeDeploy"
+                                },
+                                "Configuration"  : {
+                                    "ApplicationName" : {
+                                        "Ref" : "CodeDeployAppBeta"
+                                    },
+                                    "DeploymentGroupName" : {
+                                        "Ref" : "CodeDeployAppBetaFleet"
+                                    }
+                                },
+                                "RunOrder"       : 1
+                            }
+                        ]
+                    },
+                    {
+                        "Name" : "Release",
+                        "Actions" : [
+                            {
+                                "Name" : "Prod",
+                                "InputArtifacts" : [
+                                    {
+                                        "Name" : "SourceOutput"
+                                    }
+                                ],
+                                "ActionTypeId"   : {
+                                    "Category" : "Deploy",
+                                    "Owner"    : "AWS",
+                                    "Version"  : "1",
+                                    "Provider" : "CodeDeploy"
+                                },
+                                "Configuration"  : {
+                                    "ApplicationName" : {
+                                        "Ref" : "CodeDeployAppProd"
+                                    },
+                                    "DeploymentGroupName" : {
+                                        "Ref" : "CodeDeployAppProdFleet"
+                                    }
+                                },
+                                "RunOrder"       : 1
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "InstanceRole"           : {
+            "Type" : "AWS::IAM::Role",
+            "Properties" : {
+                "AssumeRolePolicyDocument" : {
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Principal" : {
+                                "Service" : [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action"    : [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path"                     : "/"
+            }
+        },
+        "InstanceRolePolicies"   : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "InstanceRole",
+                "PolicyDocument" : {
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "autoscaling:Describe*",
+                                "cloudformation:Describe*",
+                                "cloudformation:GetTemplate",
+                                "s3:Get*"
+                            ],
+                            "Resource" : "*"
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "InstanceRole"
+                    }
+                ]
+            }
+        },
+        "InstanceRoleInstanceProfile" : {
+            "Type" : "AWS::IAM::InstanceProfile",
+            "Properties" : {
+                "Path" : "/",
+                "Roles" : [
+                    {
+                        "Ref" : "InstanceRole"
+                    }
+                ]
+            }
+        }
+	},
+	"Outputs" : {
+		"BetaDNS" : {
+		    "Value" : {"Fn::GetAtt" : [ "AppServerBeta", "PublicDnsName"]},
+            "Description" : "The DNS for the Beta stage that will have the ASP.NET Core application deployed to."
+		},
+		"ProdDNS" : {
+		    "Value" : {"Fn::GetAtt" : [ "ProdLoadBalancer", "DNSName"]},
+            "Description" : "The DNS for the Prod stage that will have the ASP.NET Core application deployed to."
+		},
+        "CodeDeployTrustRoleARN" : {
+            "Value" : {
+                "Fn::GetAtt" : [
+                    "CodeDeployTrustRole",
+                    "Arn"
+                ]
+            }
+        }
+	}
+}

@@ -7,12 +7,12 @@ Param(
     # The instance type for the beta stage
     [Parameter()]
     [string]
-    $betaInstanceType = "m1.small",
+    $betaInstanceType = "t2.small",
 
     # The instance type for the prod stage
     [Parameter()]
     [string]
-    $prodInstanceType = "m1.small",
+    $prodInstanceType = "t2.medium",
 
 	# true or false if you want the RDP port opened.
     [Parameter()]
@@ -127,6 +127,8 @@ function ProcessInput([string]$betaInstanceType,[string]$prodInstanceType,[strin
     ("CodePipeline environment setup complete")
     ("Beta Stage DNS: " + $betaDNS)
     ("Prod Stage DNS: " + $prodDNS)
+    ("S3 Bucket for Pipeline Source: " + $bucketName)
+    ("S3 Object Key for Pipeline Source: aws-blog-net-exploring-aspnet-core.zip")
 }
 
 

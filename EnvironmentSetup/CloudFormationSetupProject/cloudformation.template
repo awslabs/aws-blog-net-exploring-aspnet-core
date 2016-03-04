@@ -15,12 +15,12 @@
         "BetaInstanceType" : {
             "Type" : "String",
             "Description" : "The EC2 instance type to use when creating the application servers",
-            "Default"     : "m1.small"
+            "Default"     : "t2.small"
         },
         "ProdInstanceType" : {
             "Type" : "String",
             "Description" : "The EC2 instance type to use when creating the application servers",
-            "Default"     : "m1.small"
+            "Default"     : "t2.medium"
         },
         "EC2KeyName"   : {
             "Type" : "AWS::EC2::KeyPair::KeyName",

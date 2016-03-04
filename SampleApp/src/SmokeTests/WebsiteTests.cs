@@ -16,10 +16,12 @@ namespace SmokeTests
         [Fact]
         public async Task PassingTest()
         {
-            var client = new HttpClient();
-            var response = await client.GetStringAsync("http://localhost/");
+            using (var client = new HttpClient())
+            {
+                var response = await client.GetStringAsync("http://localhost/");
 
-            Assert.Equal("Exploring ASP.NET Core with AWS.", response);
+                Assert.Equal("Exploring ASP.NET Core with AWS.", response);
+            }
         }
     }
 }

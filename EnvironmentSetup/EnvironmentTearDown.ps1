@@ -9,7 +9,7 @@ if ((Get-DefaultAWSRegion) -eq $null)
 
 function _deletePipelineBucket()
 {
-    Get-S3Bucket | Where-Object {$_.BucketName.StartsWith("ExploringAspNetCore-Part2-")} | foreach {Write-Host 'Deleting pipeline bucket:' $_.BucketName; Remove-S3Bucket -BucketName $_.BucketName -DeleteBucketContent -Force}    
+    Get-S3Bucket | Where-Object {$_.BucketName.StartsWith("exploringaspnetcore-part2-")} | foreach {Write-Host 'Deleting pipeline bucket:' $_.BucketName; Remove-S3Bucket -BucketName $_.BucketName -DeleteBucketContent -Force}    
 }
 
 function _deleteStack()

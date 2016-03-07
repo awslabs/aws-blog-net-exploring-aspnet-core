@@ -54,7 +54,7 @@ function _LaunchCloudFormationStack([string]$bucketName, [string]$betaInstanceTy
 
 function _SetupPipelineBucket()
 {
-    $bucketName = "ExploringAspNetCore-Part2-" + [System.DateTime]::Now.Ticks
+    $bucketName = ("ExploringAspNetCore-Part2-" + [System.DateTime]::Now.Ticks).ToLowerInvariant()
     $bucket = New-S3Bucket -BucketName $bucketName
     Write-S3BucketVersioning -BucketName $bucketName -VersioningConfig_Status Enabled
 

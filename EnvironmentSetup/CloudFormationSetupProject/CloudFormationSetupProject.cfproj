@@ -18,9 +18,6 @@
     <Compile Include="cloudformation.template">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="scratch.template">
-      <SubType>Code</SubType>
-    </Compile>
   </ItemGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
   </PropertyGroup>

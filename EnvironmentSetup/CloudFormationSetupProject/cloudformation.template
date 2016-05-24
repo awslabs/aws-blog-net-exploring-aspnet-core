@@ -91,17 +91,34 @@
                 "AWS::CloudFormation::Init" : {
                     "config" : {
                         "commands" : {
-                            "01-import-service-module"  : {
+                            "01-download-dotnetcli" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command \"((new-object net.webclient).DownloadFile('https://go.microsoft.com/fwlink/?LinkID=798398', 'C:\\cfn\\DotNetCore.1.0.0.RC2-SDK.Preview1-x64.exe'))\""
+                                        ]
+                                    ]
+                                },
+                                "cwd"     : "C:/cfn",
+                                "waitAfterCompletion" : 0
+                            },
+                            "02-install-dotnetcli"  : {
+                                "command" : "C:\\cfn\\DotNetCore.1.0.0.RC2-SDK.Preview1-x64.exe /install /quiet /log C:\\cfn\\DotNetCore.1.0.0.RC2-SDK.Preview1-x64.txt",
+                                "ignoreErrors" : "true",
+                                "waitAfterCompletion" : 0
+                            },
+                            "03-import-service-module"  : {
                                 "command" : "powershell.exe -Command Import-Module -Name ServerManager",
                                 "ignoreErrors" : "true",
                                 "waitAfterCompletion" : 0
                             },
-                            "02-install-web-server"  : {
+                            "04-install-web-server"  : {
                                 "command" : "powershell.exe -Command Install-WindowsFeature Web-Server,Application-Server,AS-Web-Support",
                                 "ignoreErrors" : "true",
                                 "waitAfterCompletion" : 0
                             },
-                            "03-download-host-agent" : {
+                            "05-download-host-agent" : {
                                 "command" : {
                                     "Fn::Join" : [
                                         "",
@@ -116,29 +133,29 @@
                                 "cwd"     : "C:/cfn",
                                 "waitAfterCompletion" : 0
                             },
-                            "04-install-host-agent"  : {
+                            "06-install-host-agent"  : {
                                 "command" : "C:\\cfn\\codedeploy-agent.msi /quiet /l C:\\cfn\\host-agent-install-log.txt",
                                 "ignoreErrors" : "true",
                                 "waitAfterCompletion" : 0
                             },
-                            "05-download-host-agent" : {
+                            "07-download-dotnet-hosting" : {
                                 "command" : {
                                     "Fn::Join" : [
                                         "",
                                         [
-                                            "powershell.exe -Command \"((new-object net.webclient).DownloadFile('http://go.microsoft.com/fwlink/?LinkId=690721', 'C:\\cfn\\httpPlatformHandler_amd64.msi'))\""
+                                            "powershell.exe -Command \"((new-object net.webclient).DownloadFile('http://go.microsoft.com/fwlink/?LinkId=798480', 'C:\\cfn\\DotNetCore.1.0.0.RC2-WindowsHosting.exe'))\""
                                         ]
                                     ]
                                 },
                                 "cwd"     : "C:/cfn",
                                 "waitAfterCompletion" : 0
                             },
-                            "06-install-host-agent"  : {
-                                "command" : "C:\\cfn\\httpPlatformHandler_amd64.msi /quiet /l C:\\cfn\\httpPlatformHandler-install-log.txt",
+                            "08-install-dotnet-hosting"  : {
+                                "command" : "C:\\cfn\\DotNetCore.1.0.0.RC2-WindowsHosting.exe /install /quiet /log C:\\cfn\\DotNetCore.1.0.0.RC2-WindowsHosting.txt",
                                 "ignoreErrors" : "true",
                                 "waitAfterCompletion" : 0
                             },
-                            "07-signal-ready"        : {
+                            "09-signal-ready"        : {
                                 "command" : {
                                     "Fn::Join" : [
                                         "",
@@ -224,17 +241,34 @@
                 "AWS::CloudFormation::Init" : {
                     "config" : {
                         "commands" : {
-                            "01-import-service-module"  : {
+                            "01-download-dotnetcli" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command \"((new-object net.webclient).DownloadFile('https://go.microsoft.com/fwlink/?LinkID=798398', 'C:\\cfn\\DotNetCore.1.0.0.RC2-SDK.Preview1-x64.exe'))\""
+                                        ]
+                                    ]
+                                },
+                                "cwd"     : "C:/cfn",
+                                "waitAfterCompletion" : 0
+                            },
+                            "02-install-dotnetcli"  : {
+                                "command" : "C:\\cfn\\DotNetCore.1.0.0.RC2-SDK.Preview1-x64.exe /install /quiet /log C:\\cfn\\DotNetCore.1.0.0.RC2-SDK.Preview1-x64.txt",
+                                "ignoreErrors" : "true",
+                                "waitAfterCompletion" : 0
+                            },
+                            "03-import-service-module"  : {
                                 "command" : "powershell.exe -Command Import-Module -Name ServerManager",
                                 "ignoreErrors" : "true",
                                 "waitAfterCompletion" : 0
                             },
-                            "02-install-web-server"  : {
+                            "04-install-web-server"  : {
                                 "command" : "powershell.exe -Command Install-WindowsFeature Web-Server,Application-Server,AS-Web-Support",
                                 "ignoreErrors" : "true",
                                 "waitAfterCompletion" : 0
                             },
-                            "03-download-host-agent" : {
+                            "05-download-host-agent" : {
                                 "command" : {
                                     "Fn::Join" : [
                                         "",
@@ -249,29 +283,29 @@
                                 "cwd"     : "C:/cfn",
                                 "waitAfterCompletion" : 0
                             },
-                            "04-install-host-agent"  : {
+                            "06-install-host-agent"  : {
                                 "command" : "C:\\cfn\\codedeploy-agent.msi /quiet /l C:\\cfn\\host-agent-install-log.txt",
                                 "ignoreErrors" : "true",
                                 "waitAfterCompletion" : 0
                             },
-                            "05-download-host-agent" : {
+                            "07-download-dotnet-hosting" : {
                                 "command" : {
                                     "Fn::Join" : [
                                         "",
                                         [
-                                            "powershell.exe -Command \"((new-object net.webclient).DownloadFile('http://go.microsoft.com/fwlink/?LinkId=690721', 'C:\\cfn\\httpPlatformHandler_amd64.msi'))\""
+                                            "powershell.exe -Command \"((new-object net.webclient).DownloadFile('http://go.microsoft.com/fwlink/?LinkId=798480', 'C:\\cfn\\DotNetCore.1.0.0.RC2-WindowsHosting.exe'))\""
                                         ]
                                     ]
                                 },
                                 "cwd"     : "C:/cfn",
                                 "waitAfterCompletion" : 0
                             },
-                            "06-install-host-agent"  : {
-                                "command" : "C:\\cfn\\httpPlatformHandler_amd64.msi /quiet /l C:\\cfn\\httpPlatformHandler-install-log.txt",
+                            "08-install-dotnet-hosting"  : {
+                                "command" : "C:\\cfn\\DotNetCore.1.0.0.RC2-WindowsHosting.exe /install /quiet /log C:\\cfn\\DotNetCore.1.0.0.RC2-WindowsHosting.txt",
                                 "ignoreErrors" : "true",
                                 "waitAfterCompletion" : 0
                             },
-                            "07-signal-ready"        : {
+                            "09-signal-ready"        : {
                                 "command" : {
                                     "Fn::Join" : [
                                         "",

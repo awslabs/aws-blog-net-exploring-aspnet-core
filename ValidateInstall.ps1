@@ -1,12 +1,9 @@
 ﻿sl C:\ExploringAspNetCore\SampleApp\src\SmokeTests
 
-# Install the latest dnx runtime
-C:\Windows\system32\config\systemprofile\.dnx\bin\dnvm install latest -p
-
 # Restore the nuget references
-dnu restore
+& "C:\Program Files\dotnet\dotnet.exe" restore
 
 # Run the smoke tests
-dnx test
+& "C:\Program Files\dotnet\dotnet.exe" test
 
 exit $LastExitCode
